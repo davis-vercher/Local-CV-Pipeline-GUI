@@ -394,7 +394,7 @@ class OutdoorVisionApp:
         else:
             path_label = tk.Label(left, text=project.path, bg=background, fg=ACCENT, font=(FONT, 8, "underline"), anchor="w", cursor="hand2")
             path_label.bind("<Button-1>", lambda _event, p=project: self._open_folder(p))
-        path_label.pack(fill="x", pady=(4, 0))
+        path_label.pack(anchor="w", pady=(4, 0))
         tk.Label(left, text=f"Last edited {format_local_timestamp(project.last_edited)}", bg=background, fg=SUBTLE, font=(FONT, 8), anchor="w").pack(fill="x", pady=(5, 0))
 
         labeled, total, percentage = progress_values(project)
@@ -420,7 +420,13 @@ class OutdoorVisionApp:
         )
         ellipsis.pack(side="right", padx=(4, 14))
         if not missing:
-            for widget in (card, left, name):
+            interactive_widgets = {path_label, ellipsis}
+            card_widgets = [card]
+            for widget in card_widgets:
+                card_widgets.extend(widget.winfo_children())
+            for widget in card_widgets:
+                if widget in interactive_widgets:
+                    continue
                 widget.bind("<Button-1>", lambda _event, p=project: self._open_project(p))
 
     def _update_pagination(self, project_count: int) -> None:
