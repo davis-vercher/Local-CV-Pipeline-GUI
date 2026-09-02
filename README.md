@@ -1,28 +1,28 @@
 # Outdoor Vision CV Desktop App
 
 A local Windows desktop application for creating and managing computer-vision
-projects. The project home page is the entry point for the future Outdoor Vision
-CV data-preparation pipeline.
+projects. The project home page now includes Intake, the first stage of the
+Outdoor Vision CV data-preparation pipeline.
 
-The original JPEG Dataset Sorter remains available as a standalone prototype and
-has not yet been integrated into a project workspace.
+The original JPEG Dataset Sorter remains available as a standalone tool. Intake
+is integrated separately and does not replace or modify the legacy workflow.
 
 ## Setup
 
 1. Double-click `run_outdoor_vision_cv.bat`. It will use a compatible local
    Python installation automatically when one is available.
-2. If the launcher reports that Python is missing, install Python 3 for Windows
+2. Install the local dependencies once with:
+
+       python -m pip install -r gui\requirements.txt
+
+3. If the launcher reports that Python is missing, install Python 3 for Windows
    from python.org. During installation, enable **Add Python to PATH** and ensure
    Tcl/Tk is selected.
 
-Pillow is not required by the home page. To use the legacy image sorter, install
-its image-display dependency:
-
-       python -m pip install -r requirements.txt
-
-Then launch it with `run_jpg_sorter.bat`.
-
 The applications do not connect to the internet.
+
+Intake supports local Windows folders only. Network, UNC, removable, and mapped
+drive locations are not guaranteed or supported.
 
 ## Home Page Use
 
@@ -32,11 +32,27 @@ The applications do not connect to the internet.
    characters, and create the project.
 3. Search or sort the project cards. Select **Refresh** to recount JPEG files
    recursively in every project.
-4. Click a project card to enter its placeholder project screen, or click its
+4. Click a project card to enter its project-tools screen, or click its
    path to open the folder in Windows File Explorer.
 5. Use the card's ellipsis menu to rename or permanently delete a project.
 6. Use **Settings** to move the complete project library to another parent
    folder.
+
+## Intake Use
+
+1. Open a project and click the **Intake** tool card. The tool creates and reuses
+   `intake\unsorted` and `intake\sorted` inside the project.
+2. Drop one local folder onto the import area or use **Browse for Folder**. Review
+   the recursive JPEG scan and confirm Import. Files are copied, flattened, and
+   collision-renamed; originals remain unchanged.
+3. Create direct class folders and explicitly assign classes to number keys 0-9.
+4. Select **Start / Resume Sorting**. Classify with a mapped number key or button,
+   use Skip to move an image behind the complete queue, and use multi-step Undo
+   for classifications made in the active session.
+5. Use **Review Master Dataset** for direct JPEG counts and File Explorer links.
+
+Queue manifests and class mappings are stored privately in the user's local
+application-data folder and are bound to the project's stable internal ID.
 
 Private registry data is stored in the user's local Windows application-data
 folder. User project folders contain only user-visible project content.
@@ -62,4 +78,4 @@ added to the moved filename. Folder choices are saved locally in
 
 From the repository root, run:
 
-    python -m unittest discover -s data\gui -p "test_*.py" -v
+    python -m unittest discover -s gui -p "test_*.py" -v
