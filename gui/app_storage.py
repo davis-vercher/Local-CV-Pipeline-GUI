@@ -43,7 +43,13 @@ class StateStore:
             raw = json.loads(self.state_path.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
                 raise ValueError("The root value must be an object.")
-            return AppState.from_dict(raw)
+            state = AppState.from_dict(raw)
+            raw_projects = raw.get("projects", [])
+            if any(isinstance(item, dict) and not item.get("project_id") for item in raw_projects):
+                # Persist generated IDs once so private per-project tool state has
+                # a stable identity across all future launches.
+                self.save(state)
+            return state
         except (OSError, ValueError, TypeError, KeyError) as error:
             raise StateLoadError(
                 f"Saved application data could not be read from:\n{self.state_path}\n\n{error}"

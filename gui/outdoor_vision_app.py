@@ -34,6 +34,11 @@ from project_services import (
     validate_project_name,
 )
 
+try:
+    from tkinterdnd2 import TkinterDnD
+except ImportError:
+    TkinterDnD = None
+
 
 APP_TITLE = "Outdoor Vision CV"
 BG = "#17181b"
@@ -73,6 +78,9 @@ class OutdoorVisionApp:
         self.card_height = CARD_HEIGHT
         self.resize_job: str | None = None
         self.active_dialog: tk.Toplevel | None = None
+        self.intake_ui = None
+        self.stats_refresh_running = False
+        self.stats_refresh_pending = False
 
         self.root.title(APP_TITLE)
         self.root.geometry("1120x790")
@@ -253,6 +261,7 @@ class OutdoorVisionApp:
         ttk.Button(card, text="Continue", style="Accent.TButton", command=continue_setup).pack(anchor="e", padx=34, pady=(54, 0))
 
     def _build_home(self) -> None:
+        self._dispose_intake()
         self.app_state = "home_ready"
         self.current_page = 0
         self._clear_root()
@@ -630,16 +639,97 @@ class OutdoorVisionApp:
     def _open_project(self, project: ProjectRecord) -> None:
         if self.app_state != "home_ready" or not project.folder.is_dir():
             return
-        self.app_state = "opening_project"
+        self.show_project_tools(project)
+
+    def show_project_tools(self, project: ProjectRecord) -> None:
+        """Show the reusable project workspace and its available tool cards."""
+
+        self._dispose_intake()
+        self.app_state = "project_tools"
         self._clear_root()
         shell = ttk.Frame(self.root, padding=34)
         shell.pack(fill="both", expand=True)
-        ttk.Button(shell, text="←  Back to Projects", command=self._build_home).pack(anchor="w")
-        card = tk.Frame(shell, bg=SURFACE, highlightbackground=BORDER, highlightthickness=1)
-        card.pack(fill="both", expand=True, pady=(26, 0))
-        tk.Label(card, text=project.name, bg=SURFACE, fg=TEXT, font=(FONT, 24, "bold")).pack(pady=(110, 10))
-        tk.Label(card, text=project.path, bg=SURFACE, fg=MUTED, font=(FONT, 10)).pack()
-        tk.Label(card, text="Project tools will appear here in a future update.", bg=SURFACE, fg=SUBTLE, font=(FONT, 11)).pack(pady=(34, 0))
+        ttk.Button(shell, text="←  Back to Projects", command=self._return_home).pack(anchor="w")
+        ttk.Label(shell, text=project.name, font=(FONT, 24, "bold")).pack(anchor="w", pady=(28, 3))
+        ttk.Label(shell, text=project.path, foreground=MUTED).pack(anchor="w")
+        ttk.Label(shell, text="Project Tools", font=(FONT, 14, "bold")).pack(anchor="w", pady=(30, 10))
+
+        card = tk.Frame(
+            shell,
+            bg=SURFACE,
+            highlightbackground=BORDER,
+            highlightthickness=1,
+            cursor="hand2",
+            height=150,
+            takefocus=True,
+        )
+        card.pack(fill="x")
+        card.pack_propagate(False)
+        title = tk.Label(card, text="Intake", bg=SURFACE, fg=TEXT, font=(FONT, 17, "bold"), anchor="w", cursor="hand2")
+        title.pack(fill="x", padx=22, pady=(27, 7))
+        description = tk.Label(
+            card,
+            text="Import JPEG images into the project, create classes, and sort images into the master dataset.",
+            bg=SURFACE,
+            fg=MUTED,
+            font=(FONT, 10),
+            anchor="w",
+            cursor="hand2",
+        )
+        description.pack(fill="x", padx=22)
+        for widget in (card, title, description):
+            widget.bind("<Button-1>", lambda _event, p=project: self._open_intake(p))
+        card.bind("<Return>", lambda _event, p=project: self._open_intake(p))
+        card.bind("<space>", lambda _event, p=project: self._open_intake(p))
+        card.bind("<FocusIn>", lambda _event: card.configure(highlightbackground=ACCENT, highlightthickness=2))
+        card.bind("<FocusOut>", lambda _event: card.configure(highlightbackground=BORDER, highlightthickness=1))
+
+    def _open_intake(self, project: ProjectRecord) -> None:
+        try:
+            from intake_ui import IntakeUI
+
+            self._dispose_intake()
+            self.intake_ui = IntakeUI(self, project)
+        except Exception as error:
+            self.intake_ui = None
+            messagebox.showerror(APP_TITLE, f"Intake could not be opened:\n\n{error}", parent=self.root)
+            self.show_project_tools(project)
+
+    def _dispose_intake(self) -> None:
+        controller = self.intake_ui
+        if controller is not None:
+            controller.dispose()
+        self.intake_ui = None
+
+    def _return_home(self) -> None:
+        self._build_home()
+        self._refresh_statistics()
+
+    def refresh_project_record(self, project: ProjectRecord) -> None:
+        """Recount one project off the UI thread, coalescing rapid requests."""
+
+        if self.stats_refresh_running:
+            self.stats_refresh_pending = True
+            return
+        self.stats_refresh_running = True
+
+        def work() -> None:
+            result = scan_project(project)
+            self.root.after(0, lambda: finish(result))
+
+        def finish(result) -> None:
+            try:
+                apply_scan_results(self.state, self.store, [result])
+            except Exception:
+                # The initiating Intake operation has already reported its own
+                # success or failure. A later manual Refresh remains available.
+                pass
+            self.stats_refresh_running = False
+            if self.stats_refresh_pending:
+                self.stats_refresh_pending = False
+                self.refresh_project_record(project)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _show_settings(self) -> None:
         if self.app_state != "home_ready":
@@ -722,13 +812,16 @@ class OutdoorVisionApp:
         return dialog
 
     def _close(self) -> None:
+        if self.intake_ui is not None and not self.intake_ui.confirm_close():
+            return
+        self._dispose_intake()
         if self.resize_job is not None:
             self.root.after_cancel(self.resize_job)
         self.root.destroy()
 
 
 def main() -> None:
-    root = tk.Tk()
+    root = TkinterDnD.Tk() if TkinterDnD is not None else tk.Tk()
     OutdoorVisionApp(root)
     root.mainloop()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import json
 import tempfile
 import unittest
 
@@ -218,6 +219,21 @@ class ProjectServicesTests(unittest.TestCase):
         self.store.state_path.write_text("{bad json", encoding="utf-8")
         with self.assertRaises(StateLoadError):
             self.store.load()
+
+    def test_legacy_registry_project_id_is_migrated_once_and_stays_stable(self) -> None:
+        self.store.state_path.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "library_path": str(self.library),
+                    "projects": [{"name": "Legacy", "path": str(self.library / "Legacy")}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        first_id = self.store.load().projects[0].project_id
+        second_id = self.store.load().projects[0].project_id
+        self.assertEqual(first_id, second_id)
 
 
 if __name__ == "__main__":
